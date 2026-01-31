@@ -108,17 +108,42 @@ tar xzf ./actions-runner-linux-x64-2.331.0.tar.gz
 ```
 
 ### 4. Configure Monitoring (Optional)
-
 ```bash
 cd monitoring
-
-# Copy and edit the config files
 cp alertmanager.yaml.example alertmanager.yaml
 cp .env.example .env
+```
 
-# Edit .env with your Telegram bot credentials
-# Then start the monitoring stack
-docker-compose up -d
+#### Setting Up Telegram Alerts
+
+1. **Create a bot:**
+   - Open Telegram and search for `@BotFather`
+   - Send `/newbot` and follow the prompts
+   - Give your bot a name (e.g., `CI Pipeline Alerts`)
+   - Save the **bot token** (looks like `5300123456:AAG...`)
+
+2. **Get your chat ID:**
+   - Search for `@RawDataBot` in Telegram
+   - Send it any message (or add it to your group)
+   - It will reply with your **chat ID** (e.g., `123456789` or `-100123456789` for groups)
+   - Remove `@RawDataBot` after
+
+3. **Configure alertmanager.yaml:**
+```yaml
+   bot_token: "your_bot_token_here"
+   chat_id: your_chat_id_here  # No quotes for numbers
+```
+
+4. **Start the monitoring stack:**
+```bash
+   docker-compose up -d
+```
+
+5. **Test alerts:**
+```bash
+   curl -X POST http://localhost:9093/api/v2/alerts \
+     -H "Content-Type: application/json" \
+     -d '[{"labels":{"alertname":"Test","severity":"warning"},"annotations":{"title":"Test Alert","message":"It works!"}}]'
 ```
 
 ## Usage
