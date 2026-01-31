@@ -125,7 +125,7 @@ jobs:
       - name: Run Ansible playbook
         run: |
           cd ansible
-          ansible-playbook -i inventory.ini deploy.yml
+          ansible-playbook -i inventory.ini deploy.yaml
 
       - name: Cleanup SSH key
         if: always()
