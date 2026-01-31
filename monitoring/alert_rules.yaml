@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://json.schemastore.org/prometheus.rules.json
+
+# Prometheus alerting rules for system and container monitoring
+# Alerts are sent to Alertmanager when conditions are met
+#
+# Alert thresholds:
+#   - Disk: >90% full
+#   - CPU: >80% for 2min
+#   - Memory: <10% available
+#   - Container resources: >80% usage
+
+groups:
+- name: node
+  rules:
+  - alert: HostOutOfDiskSpace
+    expr: (100 - (100 * node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 90
+    for: 5m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: "Host out of disk space (instance {{ $labels.instance }})"
+      message: "Disk is almost full (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+  - alert: HostHighCpuLoad
+    expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 2m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: Host high CPU load
+      message: "\n  CPU load is > 80%\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+  - alert: HostOutOfMemory
+    expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+    for: 0m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: Host out of memory
+      message: "\n  Node memory is filling up (< 10% left)\n VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+
+  - alert: HostOutOfInodes
+    expr: node_filesystem_files_free{mountpoint ="/rootfs"} / node_filesystem_files{mountpoint="/rootfs"} * 100 < 10 and ON (instance, device, mountpoint) node_filesystem_readonly{mountpoint="/rootfs"} == 0
+    for: 0m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: Host out of inodes
+      message: "\n  Disk is almost running out of available inodes (< 10% left)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: HostOomKillDetected
+    expr: increase(node_vmstat_oom_kill[1m]) > 0
+    for: 0m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: Host OOM kill detected
+      message: "\n  OOM kill detected\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  - alert: ContainerCpuUsage
+    expr: (sum(rate(container_cpu_usage_seconds_total{name!=""}[3m])) BY (instance, name) * 100) > 80
+    for: 2m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: Container CPU usage (instance {{ $labels.instance }})
+      message: "Container CPU usage is above 80%\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+  # See https://medium.com/faun/how-much-is-too-much-the-linux-oomkiller-and-used-memory-d32186f29c9d
+  - alert: ContainerMemoryUsage
+    expr: (sum(container_memory_working_set_bytes{name!=""}) BY (instance, name) / sum(container_spec_memory_limit_bytes > 0) BY (instance, name) * 100) > 80
+    for: 2m
+    labels:
+      severity: warning
+      instance: "{{ $labels.instance }}"
+    annotations:
+      title: Container Memory usage (instance {{ $labels.instance }})
+      message: "Container Memory usage is above 80%\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+      

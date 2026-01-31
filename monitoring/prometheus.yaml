@@ -1,0 +1,29 @@
+# Prometheus configuration for metrics collection
+#
+# Scrapes metrics from:
+#   - Node Exporter (system metrics)
+#
+# Targets use Docker Compose service names when running in same network,
+# or IP addresses for external hosts.
+
+global:
+  scrape_interval: 15s
+  external_labels:
+    monitor: 'cicd-monitor'
+
+scrape_configs:
+  - job_name: "node"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["node-exporter:9100"]  # Docker service name
+        labels:
+          group: 'hello-app'
+
+rule_files:
+  - /etc/prometheus/alert_rules.yaml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+        

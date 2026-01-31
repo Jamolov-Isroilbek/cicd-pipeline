@@ -1,0 +1,133 @@
+# CI/CD Pipeline for Hello World Spring Boot Application
+#
+# Triggers: Push/PR to main branch
+# Jobs:
+#   - build: Compile and package WAR
+#   - test: Run unit tests
+#   - deploy: Deploy to Vagrant VM via Ansible (self-hosted runner)
+#
+# Required secrets:
+#   - SSH_PRIVATE_KEY: Private key for Vagrant VM access
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  JAVA_VERSION: '17'
+  ANSIBLE_HOST: '192.168.56.101'
+  ANSIBLE_USER: 'vagrant'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+
+      - name: List built artifacts
+        run: ls -la target/
+
+      - name: Upload WAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: war-file
+          path: target/*.war
+          retention-days: 7
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run tests
+        run: mvn test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+  deploy:
+    name: Deploy
+    runs-on: self-hosted
+    needs: [build, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download WAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: war-file
+          path: ./artifact
+
+      - name: List downloaded artifact
+        run: |
+          echo "Contents of ./artifact:"
+          ls -la ./artifact/
+          echo "Looking for WAR files:"
+          find . -name "*.war" -type f
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ env.ANSIBLE_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create target directory on remote
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ env.ANSIBLE_USER }}@${{ env.ANSIBLE_HOST }} \
+            "mkdir -p /home/vagrant/cicd-pipeline"
+
+      - name: Copy WAR to deployment server
+        run: |
+          scp -i ~/.ssh/id_rsa ./artifact/*.war \
+            ${{ env.ANSIBLE_USER }}@${{ env.ANSIBLE_HOST }}:/home/vagrant/cicd-pipeline/
+
+      - name: Copy project files to deployment server
+        run: |
+          scp -i ~/.ssh/id_rsa -r ./Dockerfile ./docker-compose.yaml ./ansible \
+            ${{ env.ANSIBLE_USER }}@${{ env.ANSIBLE_HOST }}:/home/vagrant/cicd-pipeline/
+
+      - name: Run Ansible playbook
+        run: |
+          cd ansible
+          ansible-playbook -i inventory.ini deploy.yml
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
+        

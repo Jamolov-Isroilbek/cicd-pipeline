@@ -1,0 +1,26 @@
+# Build outputs
+target/
+*.war
+*.jar
+
+# Maven
+.m2/
+
+# Vagrant
+.vagrant/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+monitoring/.env
+monitoring/alertmanager.yaml
+
+# Logs
+*.log

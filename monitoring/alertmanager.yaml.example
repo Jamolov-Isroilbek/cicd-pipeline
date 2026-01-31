@@ -1,0 +1,30 @@
+# Alertmanager configuration for routing alerts to Telegram
+#
+# Setup:
+#   1. Copy this file: cp alertmanager.yaml.example alertmanager.yaml
+#   2. Replace YOUR_BOT_TOKEN and YOUR_CHAT_ID with real values
+#   3. Never commit alertmanager.yaml
+
+route:
+  group_wait: 5s
+  group_interval: 15s
+  repeat_interval: 5h
+  group_by: ['alertname', 'cluster', 'service']
+  receiver: 'telegram-alerts'
+
+receivers:
+  - name: 'telegram-alerts'
+    telegram_configs:
+      - send_resolved: true
+        bot_token: "YOUR_BOT_TOKEN"
+        chat_id: YOUR_CHAT_ID
+        api_url: https://api.telegram.org
+        message: |
+          {{ if eq .Status "firing" }}🔥{{ end }}{{ if eq .Status "resolved" }}✅{{ end }} [{{ .Status | toUpper }}] <b>{{ .CommonLabels.alertname }}</b>
+          {{ range .Alerts }}
+          🚨 <b>Alert:</b> {{ .Annotations.title }}
+          🛎️ <b>Severity:</b> {{ .Labels.severity }}
+          ℹ️ <b>Description:</b> {{ .Annotations.message }}
+          {{ end }}
+        parse_mode: "HTML"
+        

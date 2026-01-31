@@ -1,0 +1,54 @@
+---
+- name: Deploy Application
+  hosts: all
+  become: yes
+  vars:
+    docker_image_name: "hello-app"
+    docker_image_tag: "latest"
+    docker_image_path: "/home/vagrant/cicd-pipeline"
+    dockerfile_path: "/home/vagrant/cicd-pipeline/Dockerfile"
+    stack_name: "hello"
+
+  tasks:
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_version
+      ignore_errors: yes
+
+    - name: Install Docker if not present
+      apt:
+        name: docker.io
+        state: present
+      when: docker_version.failed
+    
+    - name: Build the Docker image
+      docker_image:
+        name: "{{ docker_image_name }}"
+        tag: "{{ docker_image_tag }}"
+        source: build
+        build:
+          path: "{{ docker_image_path }}"
+      register: docker_build_result
+
+    - name: Check if Docker Swarm is initialized
+      command: docker info
+      register: docker_info
+      ignore_errors: yes
+
+    - name: Initialize Docker Swarm if not present
+      command: docker swarm init --advertise-addr 192.168.56.101
+      when: "'Swarm: active' not in docker_info.stdout"
+    
+    - name: Deploy stack to Docker Swarm
+      command: docker stack deploy --with-registry-auth -c /home/vagrant/cicd-pipeline/docker-compose.yaml "{{ stack_name }}"
+      when: docker_build_result.changed
+
+    - name: Clean up old containers
+      docker_container:
+        name: "{{ docker_image_name }}"
+        state: absent
+      ignore_errors: yes
+
+    - name: Start the new stack
+      command: docker stack deploy --with-registry-auth -c /home/vagrant/cicd-pipeline/docker-compose.yaml "{{ stack_name }}"
+      when: docker_build_result.changed

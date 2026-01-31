@@ -1,0 +1,29 @@
+# Application deployment configuration for Docker Swarm
+#
+# Usage:
+#   docker stack deploy -c docker-compose.yaml hello-app
+#
+# Requires:
+#   - Loki running at specified URL for log aggregation
+
+x-logging: &loki
+  logging:
+    driver: loki
+    options:
+      loki-url: "http://192.168.56.101:3100/loki/api/v1/push"
+      loki-batch-size: "400"
+      loki-retries: "5"
+      max-size: "2g"
+
+services:
+  hello-app:
+    image: hello-app:latest
+    ports:
+      - "8081:8080"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    labels:
+      - "job=hello-app"
+      
