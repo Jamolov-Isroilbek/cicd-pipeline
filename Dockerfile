@@ -5,7 +5,7 @@ FROM eclipse-temurin:17-jdk
 
 WORKDIR /app
 
-COPY target/*.war app.war
+COPY *.war app.war
 
 EXPOSE 8080
 
